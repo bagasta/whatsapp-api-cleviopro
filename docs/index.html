@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WhatsApp API Documentation</title>
+    <style>
+      body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 2rem auto; max-width: 900px; line-height: 1.6; color: #1f2933; }
+      h1, h2, h3 { color: #0b7285; }
+      code { background: #00000000; padding: 0.15rem 0.3rem; border-radius: 4px; font-size: 0.95rem; }
+      pre { background: #050505; color: #e0f2fe; padding: 1rem; overflow: auto; border-radius: 6px; }
+      header { margin-bottom: 3rem; }
+      .endpoint { margin-bottom: 2rem; }
+      .tag { display: inline-block; background: #c3fae8; color: #0b7285; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+      a { color: #0b7285; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>WhatsApp Web API</h1>
+      <p>
+        REST API powered by <code>whatsapp-web.js</code> that manages authenticated WhatsApp sessions and forwards user messages to your AI backend.
+        Use the endpoints below to provision sessions, retrieve QR codes, and bridge text conversations.
+      </p>
+      <p>Refer to the <a href="/docs/api-reference.md">Markdown reference</a> for copy/paste samples.</p>
+    </header>
+
+    <section class="endpoint">
+      <span class="tag">POST</span>
+      <h2>/sessions</h2>
+      <p>Create (or refresh) a WhatsApp session and retrieve a QR code image valid for 5 minutes.</p>
+      <pre><code>{
+  "userId": 123,
+  "agentId": "support-bot",
+  "agentName": "Support Bot"
+}</code></pre>
+    </section>
+
+    <section class="endpoint">
+      <span class="tag">DELETE</span>
+      <h2>/sessions/{agentId}</h2>
+      <p>Terminate the WhatsApp session, delete persisted auth files, and remove the database record.</p>
+    </section>
+
+    <section class="endpoint">
+      <span class="tag">POST</span>
+      <h2>/sessions/{agentId}/reconnect</h2>
+      <p>Force a WhatsApp Web reconnection, logging out the client and returning a fresh QR code for re-authentication.</p>
+    </section>
+
+    <section class="endpoint">
+      <span class="tag">STATUS</span>
+      <h2>whatsapp_user.status</h2>
+      <p>The <code>status</code>, <code>last_connected_at</code>, and <code>last_disconnected_at</code> columns on <code>whatsapp_user</code> are updated automatically to reflect WhatsApp lifecycle events.</p>
+    </section>
+
+    <section class="endpoint">
+      <span class="tag">POST</span>
+      <h2>/agents/{agentId}/run</h2>
+      <p>Validate the stored API key and forward the payload to your AI backend.</p>
+      <pre><code>curl --location 'http://localhost:8000/agents/support-bot/run' \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer &lt;API KEY&gt;' \
+  --data '{
+    "message": "Hello",
+    "openai_api_key": "sk-***",
+    "sessionId": "6281234567890@c.us",
+    "memory_enable": true,
+    "context_memory": "100",
+    "rag_enable": true
+  }'</code></pre>
+      <p>The service emits WhatsApp typing indicators while waiting for the AI backend to respond.</p>
+    </section>
+
+    <section>
+      <h2>Message Handling Rules</h2>
+      <ul>
+        <li>Only inbound text messages are forwarded to the AI backend.</li>
+        <li>Status updates and group messages without a bot mention are ignored.</li>
+        <li>Non-text messages are downloaded to <code>TEMP_DIR</code> and auto-deleted after 24 hours.</li>
+        <li>Each forwarded payload includes the WhatsApp display name and chat title (if any).</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Health Check</h2>
+      <p>Use <code>GET /health</code> to verify the service is alive and serving traffic.</p>
+    </section>
+  </body>
+</html>
