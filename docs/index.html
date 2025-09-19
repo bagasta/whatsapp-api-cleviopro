@@ -9,10 +9,11 @@
       h1, h2, h3 { color: #0b7285; }
       code { background: #00000000; padding: 0.15rem 0.3rem; border-radius: 4px; font-size: 0.95rem; }
       pre { background: #050505; color: #e0f2fe; padding: 1rem; overflow: auto; border-radius: 6px; }
-      header { margin-bottom: 3rem; }
+      header { margin-bottom: 2.5rem; }
       .endpoint { margin-bottom: 2rem; }
       .tag { display: inline-block; background: #c3fae8; color: #0b7285; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
       a { color: #0b7285; }
+      ul { padding-left: 1.5rem; }
     </style>
   </head>
   <body>
@@ -22,8 +23,26 @@
         REST API powered by <code>whatsapp-web.js</code> that manages authenticated WhatsApp sessions and forwards user messages to your AI backend.
         Use the endpoints below to provision sessions, retrieve QR codes, and bridge text conversations.
       </p>
-      <p>Refer to the <a href="/docs/api-reference.md">Markdown reference</a> for copy/paste samples.</p>
     </header>
+
+    <section>
+      <h2>Documentation Index</h2>
+      <ul>
+        <li>
+          <a href="./api-reference.md">API Reference</a> — Endpoint-by-endpoint payload details and sample requests.
+        </li>
+        <li>
+          <a href="./how%20to%20use.md">How to Use</a> — Local setup, environment configuration, and cURL walkthroughs.
+        </li>
+        <li>
+          <a href="./how%20to%20deploy.md">How to Deploy (PM2 + Nginx)</a> — Production rollout with PM2, Nginx, and Certbot HTTPS.
+        </li>
+        <li>
+          <a href="../README.md">Project README</a> — High-level architecture, environment knobs, and database schema.
+        </li>
+      </ul>
+      <p>All Markdown pages are served alongside this HTML and can be opened directly or rendered via your favorite viewer.</p>
+    </section>
 
     <section class="endpoint">
       <span class="tag">POST</span>
