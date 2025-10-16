@@ -21,20 +21,22 @@ function extractReplyText(payload) {
   }
 
   if (typeof payload === 'object') {
-    const candidateKeys = ['reply', 'response', 'message', 'answer', 'text', 'content'];
+    // Langchain API returns response in 'response' field
+    if (payload.response && typeof payload.response !== 'object') {
+      const extracted = extractReplyText(payload.response);
+      if (extracted) {
+        return extracted;
+      }
+    }
+
+    // Check other possible fields in order of preference
+    const candidateKeys = ['response', 'output', 'reply', 'message', 'answer', 'text', 'content'];
     for (const key of candidateKeys) {
       if (key in payload) {
         const extracted = extractReplyText(payload[key]);
         if (extracted) {
           return extracted;
         }
-      }
-    }
-
-    if (typeof payload.output === 'object') {
-      const extracted = extractReplyText(payload.output);
-      if (extracted) {
-        return extracted;
       }
     }
   }

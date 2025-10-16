@@ -83,6 +83,18 @@ async function warmAgent({ endpointUrl, headers, timeout }) {
 }
 
 async function forwardToAI({ endpointUrl, apiKey, message, sessionId, openAiKey, memoryEnable = true, contextMemory = '100', ragEnable = true, metadata = {} }) {
+  logger.info({
+    endpointUrl,
+    hasApiKey: !!apiKey,
+    message: message?.substring(0, 50) + '...',
+    sessionId,
+    hasOpenAiKey: !!openAiKey,
+    memoryEnable,
+    contextMemory,
+    ragEnable,
+    metadata
+  }, 'forwardToAI called with parameters');
+
   if (!endpointUrl) {
     logger.warn({ endpointUrl }, 'Missing AI endpoint URL, skipping forward');
     return null;
@@ -95,14 +107,15 @@ async function forwardToAI({ endpointUrl, apiKey, message, sessionId, openAiKey,
   }
 
   const payload = {
-    message,
-    openai_api_key: openAiKey || config.defaultOpenAiApiKey,
-    sessionId,
-    memory_enable: memoryEnable,
-    context_memory: contextMemory,
-    rag_enable: ragEnable,
-    metadata,
+    input: message,
+    session_id: sessionId
   };
+
+  logger.info({
+    payload,
+    endpointUrl,
+    headers: { ...headers, Authorization: headers.Authorization ? '[REDACTED]' : undefined }
+  }, 'Preparing to send request to AI');
 
   const sendRequest = async () =>
     axios.post(endpointUrl, payload, {

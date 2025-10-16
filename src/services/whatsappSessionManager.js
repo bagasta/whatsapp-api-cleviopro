@@ -165,7 +165,18 @@ class WhatsappSession extends EventEmitter {
   }
 
   async handleIncomingMessage(message) {
+    logger.info({
+      agentId: this.agentId,
+      messageId: message.id?._serialized,
+      from: message.from,
+      fromMe: message.fromMe,
+      type: message.type,
+      hasBody: !!message.body,
+      body: message.body?.substring(0, 50)
+    }, 'handleIncomingMessage called');
+
     if (!message || message.fromMe) {
+      logger.debug({ agentId: this.agentId, fromMe: message.fromMe }, 'Ignoring message from self or null message');
       return;
     }
 
@@ -227,16 +238,32 @@ class WhatsappSession extends EventEmitter {
 
     const sessionId = chat.id?._serialized || contact.id?._serialized;
 
+    logger.info({
+      agentId: this.agentId,
+      sessionId,
+      message: trimmed,
+      hasAiEndpoint: !!this.aiEndpointUrl,
+      hasApiKey: !!this.apiKey,
+      aiEndpointUrl: this.aiEndpointUrl
+    }, 'Preparing to forward message to AI');
+
     const aiResponse = await showTypingWhile(
       forwardToAI({
         endpointUrl: this.aiEndpointUrl,
         apiKey: this.apiKey,
         message: trimmed,
         sessionId,
+        openAiKey: this.apiKey, // Use the same API key for OpenAI
         metadata,
       }),
       chat
     );
+
+    logger.info({
+      agentId: this.agentId,
+      sessionId,
+      aiResponseReceived: !!aiResponse
+    }, 'AI forwarding completed');
 
     const replyText = extractReplyText(aiResponse);
     if (replyText) {

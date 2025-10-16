@@ -1,7 +1,9 @@
 const pool = require('./pool');
 const logger = require('../utils/logger');
+const { runMigrations } = require('./migrate');
 
 async function ensureSchema() {
+  // Run legacy schema creation first (for backward compatibility)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS whatsapp_user (
       id SERIAL PRIMARY KEY,
@@ -56,7 +58,15 @@ async function ensureSchema() {
     $$;
   `);
 
-  logger.info('Database schema verified');
+  // Run migrations for LangChain integration
+  try {
+    await runMigrations(pool);
+    logger.info('Database schema and migrations completed successfully');
+  } catch (error) {
+    logger.error({ error: error.message }, 'Failed to run migrations');
+    // Continue anyway for backward compatibility
+    logger.warn('Continuing with legacy schema only');
+  }
 }
 
-module.exports = { pool, ensureSchema };
+module.exports = { pool, ensureSchema, runMigrations };

@@ -1,7 +1,7 @@
 const env = require('../config/env');
 const logger = require('../utils/logger');
 const sessionManager = require('./whatsappSessionManager');
-const { findActiveKeyByUserId } = require('../database/apiKeyRepository');
+const { findActiveKeyByUserId, createOrUpdateApiKey } = require('../database/apiKeyRepository');
 const { createSessionRecord, findByAgentId, deleteByAgentId, updateStatus } = require('../database/sessionRepository');
 
 function trimTrailingSlash(url) {
@@ -10,7 +10,7 @@ function trimTrailingSlash(url) {
 
 function buildEndpointUrl(agentId, baseUrl) {
   const base = trimTrailingSlash(baseUrl || env.appBaseUrl);
-  return `${base}/agents/${agentId}/run`;
+  return `${base}/api/v1/agents/${agentId}/execute`;
 }
 
 function buildAiEndpointUrl(agentId) {
@@ -22,15 +22,28 @@ function buildAiEndpointUrl(agentId) {
 
 function buildPublicEndpointUrl(agentId) {
   const base = env.appBaseUrl.endsWith('/') ? env.appBaseUrl.slice(0, -1) : env.appBaseUrl;
-  return `${base}/agents/${agentId}/run`;
+  return `${base}/api/v1/agents/${agentId}/execute`;
 }
 
-async function createSession({ userId, agentId, agentName }) {
-  const apiKey = await findActiveKeyByUserId(userId);
+async function createSession({ userId, agentId, agentName, apiKey }) {
+  // If no API key provided, try to find existing one
   if (!apiKey) {
-    const error = new Error('API key not found for user');
-    error.status = 404;
-    throw error;
+    apiKey = await findActiveKeyByUserId(userId);
+  }
+
+  // If no API key found, create a default one for LangChain integration
+  if (!apiKey) {
+    logger.warn({ userId, agentId }, 'No API key found for user, creating default key');
+    const defaultApiKey = `sk-default-${agentId}-${Date.now()}`;
+    const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year
+
+    await createOrUpdateApiKey(userId, defaultApiKey, expiresAt);
+    apiKey = defaultApiKey;
+  } else {
+    // Store the provided API key
+    const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year
+    await createOrUpdateApiKey(userId, apiKey, expiresAt);
+    logger.info({ userId, agentId }, 'Using provided API key');
   }
 
   const publicEndpointUrl = buildPublicEndpointUrl(agentId);

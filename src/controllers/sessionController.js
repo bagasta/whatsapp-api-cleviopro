@@ -22,8 +22,8 @@ async function createSession(req, res, next) {
       throw err;
     }
 
-    const { userId, agentId, agentName } = req.body;
-    const result = await sessionService.createSession({ userId, agentId, agentName });
+    const { userId, agentId, agentName, Apikey } = req.body;
+    const result = await sessionService.createSession({ userId, agentId, agentName, apiKey: Apikey });
 
     if (result.qr) {
       req.loggerInfo = { ...(req.loggerInfo || {}), qrProvided: true };
