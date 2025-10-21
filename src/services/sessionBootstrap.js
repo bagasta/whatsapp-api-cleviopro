@@ -19,7 +19,7 @@ async function bootstrapSessions() {
       await sessionManager.createOrUpdateSession({
         userId,
         agentId,
-        agentName,
+        agentName: agentName || agentId,
         apiKey,
         aiEndpointUrl,
       });

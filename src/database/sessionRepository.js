@@ -1,9 +1,14 @@
 const { pool } = require('./index');
 
+function normalizeAgentId(agentId) {
+  return typeof agentId === 'string' ? agentId.trim() : agentId;
+}
+
 async function findByAgentId(agentId) {
+  const normalizedId = normalizeAgentId(agentId);
   const { rows } = await pool.query(
-    `SELECT * FROM whatsapp_user WHERE agent_id = $1 LIMIT 1`,
-    [agentId]
+    `SELECT * FROM whatsapp_user WHERE LOWER(agent_id) = LOWER($1) LIMIT 1`,
+    [normalizedId]
   );
   return rows[0] || null;
 }
@@ -113,10 +118,12 @@ async function createSessionRecord({
 }
 
 async function deleteByAgentId(agentId) {
-  await pool.query(`DELETE FROM whatsapp_user WHERE agent_id = $1`, [agentId]);
+  const normalizedId = normalizeAgentId(agentId);
+  await pool.query(`DELETE FROM whatsapp_user WHERE LOWER(agent_id) = LOWER($1)`, [normalizedId]);
 }
 
 async function updateStatus(agentId, { status, lastConnectedAt, lastDisconnectedAt } = {}) {
+  const normalizedId = normalizeAgentId(agentId);
   const { rows } = await pool.query(
     `UPDATE whatsapp_user
      SET
@@ -124,9 +131,9 @@ async function updateStatus(agentId, { status, lastConnectedAt, lastDisconnected
        last_connected_at = COALESCE($3, last_connected_at),
        last_disconnected_at = COALESCE($4, last_disconnected_at),
        updated_at = NOW()
-     WHERE agent_id = $1
+     WHERE LOWER(agent_id) = LOWER($1)
      RETURNING *`,
-    [agentId, status || null, lastConnectedAt || null, lastDisconnectedAt || null]
+    [normalizedId, status || null, lastConnectedAt || null, lastDisconnectedAt || null]
   );
   return rows[0] || null;
 }

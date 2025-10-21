@@ -19,9 +19,19 @@ All requests to `/agents/{agentId}/run` require the `Authorization: Bearer <API 
 ```json
 {
   "userId": 123,
-  "agentId": "support-bot",
-  "agentName": "Support Bot"
+  "agentId": "support-bot"
 }
+```
+
+### cURL Example
+
+```bash
+curl -X POST http://localhost:8000/sessions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": 123,
+    "agentId": "support-bot"
+  }'
 ```
 
 ### Behavior
@@ -41,7 +51,7 @@ All requests to `/agents/{agentId}/run` require the `Authorization: Bearer <API 
   "session": {
     "userId": 123,
     "agentId": "support-bot",
-    "agentName": "Support Bot"
+    "agentName": "support-bot"
   },
   "status": {
     "state": "awaiting_qr",
@@ -68,6 +78,12 @@ If the session is already authenticated, the response omits the `qr` block and r
 - Destroys the WhatsApp client, removes persisted auth files, and deletes the matching record from `whatsapp_user`.
 - Response: `204 No Content`.
 
+### cURL Example
+
+```bash
+curl -X DELETE http://localhost:8000/sessions/support-bot
+```
+
 ---
 
 ## Reconnect Session
@@ -77,6 +93,12 @@ If the session is already authenticated, the response omits the `qr` block and r
 - Logs out the WhatsApp client, re-initializes it, and returns a fresh QR code image.
 - Response payload:
 
+### cURL Example
+
+```bash
+curl -X POST http://localhost:8000/sessions/support-bot/reconnect
+```
+
 ```json
 {
   "message": "Session reinitialized. Scan the QR code within 5 minutes to authenticate.",
@@ -84,7 +106,7 @@ If the session is already authenticated, the response omits the `qr` block and r
   "session": {
     "userId": 123,
     "agentId": "support-bot",
-    "agentName": "Support Bot"
+    "agentName": "support-bot"
   },
   "status": {
     "state": "awaiting_qr",
@@ -128,6 +150,18 @@ If the session is already authenticated, the response omits the `qr` block and r
 }
 ```
 
+### cURL Example
+
+```bash
+curl -X POST http://localhost:8000/agents/support-bot/run \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "message": "Hello assistant!",
+    "sessionId": "6281234567890@c.us"
+  }'
+```
+
 ### Behavior
 
 - Validates the API key and payload.
@@ -150,6 +184,56 @@ If the session is already authenticated, the response omits the `qr` block and r
 ```
 
 If the AI backend URL is not configured, the endpoint returns `503 Service Unavailable`.
+
+---
+
+## Send Direct WhatsApp Message
+
+`POST /agents/{agentId}/messages`
+
+### Headers
+
+- `Content-Type: application/json`
+- `Authorization: Bearer <API KEY>`
+
+### Request Body
+
+```json
+{
+  "to": "6281234567890",
+  "message": "Reminder: our meeting starts in 10 minutes."
+}
+```
+
+### cURL Example
+
+```bash
+curl -X POST http://localhost:8000/agents/support-bot/messages \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "to": "6281234567890",
+    "message": "Reminder: our meeting starts in 10 minutes."
+  }'
+```
+
+### Behavior
+
+- Validates the stored API key for the agent and checks that both `to` and `message` are provided.
+- Converts a bare phone number into a WhatsApp chat ID by appending `@c.us`; existing chat IDs (for example `XXXXXXXXXX@g.us`) are respected.
+- Requires the WhatsApp session to be in the `ready` state before sending; otherwise returns `409 Conflict`.
+- Sends the specified `message` from the authenticated bot number to the `to` recipient without invoking the AI backend.
+
+### Success Response
+
+```json
+{
+  "status": "sent",
+  "to": "6281234567890@c.us"
+}
+```
+
+If the destination chat cannot be reached, the endpoint returns `502 Bad Gateway`.
 
 ---
 

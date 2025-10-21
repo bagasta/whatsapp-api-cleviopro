@@ -26,6 +26,7 @@ function buildPublicEndpointUrl(agentId) {
 }
 
 async function createSession({ userId, agentId, agentName, apiKey }) {
+  const resolvedAgentName = agentName || agentId;
   // If no API key provided, try to find existing one
   if (!apiKey) {
     apiKey = await findActiveKeyByUserId(userId);
@@ -53,7 +54,7 @@ async function createSession({ userId, agentId, agentName, apiKey }) {
     userId,
     agentId,
     apiKey,
-    sessionName: agentName,
+    sessionName: resolvedAgentName,
     endpointUrlRun: publicEndpointUrl,
     status: 'awaiting_qr',
   });
@@ -63,7 +64,7 @@ async function createSession({ userId, agentId, agentName, apiKey }) {
   const { session } = await sessionManager.createOrUpdateSession({
     userId,
     agentId,
-    agentName,
+    agentName: resolvedAgentName,
     apiKey,
     aiEndpointUrl,
   });

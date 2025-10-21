@@ -8,7 +8,6 @@ function validateCreateSession(body) {
   }
   if (!body.userId) errors.push('userId is required');
   if (!body.agentId) errors.push('agentId is required');
-  if (!body.agentName) errors.push('agentName is required');
   return errors;
 }
 
@@ -23,6 +22,7 @@ async function createSession(req, res, next) {
     }
 
     const { userId, agentId, agentName, Apikey } = req.body;
+    const resolvedAgentName = agentName || agentId;
     const result = await sessionService.createSession({ userId, agentId, agentName, apiKey: Apikey });
 
     if (result.qr) {
@@ -33,7 +33,7 @@ async function createSession(req, res, next) {
         session: {
           userId,
           agentId,
-          agentName,
+          agentName: resolvedAgentName,
         },
         status: result.status,
         qr: result.qr,
@@ -48,7 +48,7 @@ async function createSession(req, res, next) {
       session: {
         userId,
         agentId,
-        agentName,
+        agentName: resolvedAgentName,
       },
       status: result.status,
     });
