@@ -21,9 +21,8 @@ async function createSession(req, res, next) {
       throw err;
     }
 
-    const { userId, agentId, agentName, Apikey } = req.body;
-    const resolvedAgentName = agentName || agentId;
-    const result = await sessionService.createSession({ userId, agentId, agentName, apiKey: Apikey });
+    const { userId, agentId, Apikey } = req.body;
+    const result = await sessionService.createSession({ userId, agentId, apiKey: Apikey });
 
     if (result.qr) {
       req.loggerInfo = { ...(req.loggerInfo || {}), qrProvided: true };
@@ -33,7 +32,6 @@ async function createSession(req, res, next) {
         session: {
           userId,
           agentId,
-          agentName: resolvedAgentName,
         },
         status: result.status,
         qr: result.qr,
@@ -48,7 +46,6 @@ async function createSession(req, res, next) {
       session: {
         userId,
         agentId,
-        agentName: resolvedAgentName,
       },
       status: result.status,
     });
@@ -89,8 +86,32 @@ async function reconnectSession(req, res, next) {
   }
 }
 
+async function getSessionStatus(req, res, next) {
+  try {
+    const { agentId } = req.params;
+    if (!agentId) {
+      const error = new Error('agentId is required');
+      error.status = 400;
+      throw error;
+    }
+
+    const details = await sessionService.getSessionStatus(agentId);
+    if (!details) {
+      const error = new Error('Session not found');
+      error.status = 404;
+      throw error;
+    }
+
+    req.loggerInfo = { ...(req.loggerInfo || {}), action: 'get_session_status' };
+    res.json(details);
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   createSession,
   deleteSession,
   reconnectSession,
+  getSessionStatus,
 };

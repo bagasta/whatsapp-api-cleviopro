@@ -74,7 +74,7 @@ These fields update automatically when QR codes are generated, authentication su
 
 ## Message Flow
 
-1. **Create Session** — Clients call `POST /sessions` with `userId`, `agentId`, and `agentName`.
+1. **Create Session** — Clients call `POST /sessions` with `userId` and `agentId`.
 2. **Scan QR** — Response includes a base64 PNG QR code valid for 5 minutes. Scanning authenticates the WhatsApp client.
 3. **Inbound messages** — whatsapp-web.js receives all incoming traffic.
    - Text messages are forwarded to the AI backend using the `/agents/{agentId}/run` contract, enriched with contact/group metadata, and AI replies are posted back to the same WhatsApp chat automatically with typing indicators shown while waiting.

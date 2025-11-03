@@ -4,6 +4,9 @@ const sessionManager = require('./whatsappSessionManager');
 const { findActiveKeyByUserId, createOrUpdateApiKey } = require('../database/apiKeyRepository');
 const { createSessionRecord, findByAgentId, deleteByAgentId, updateStatus } = require('../database/sessionRepository');
 
+const QR_HANDLER_ATTACHED = Symbol('qrHandlerAttached');
+const QR_HANDLER_IN_PROGRESS = Symbol('qrHandlerInProgress');
+
 function trimTrailingSlash(url) {
   return url.endsWith('/') ? url.slice(0, -1) : url;
 }
@@ -25,8 +28,30 @@ function buildPublicEndpointUrl(agentId) {
   return `${base}/api/v1/agents/${agentId}/execute`;
 }
 
-async function createSession({ userId, agentId, agentName, apiKey }) {
-  const resolvedAgentName = agentName || agentId;
+function attachQrExpiryCleanup(session, agentId) {
+  if (!session || session[QR_HANDLER_ATTACHED]) {
+    return;
+  }
+  session[QR_HANDLER_ATTACHED] = true;
+  session.on('qr_expired', async () => {
+    if (session.state === 'ready' || session[QR_HANDLER_IN_PROGRESS]) {
+      return;
+    }
+    session[QR_HANDLER_IN_PROGRESS] = true;
+    logger.info({ agentId }, 'QR code expired before authentication; cleaning up session');
+    try {
+      await deleteSession(agentId);
+      logger.info({ agentId }, 'Session removed after QR expiration');
+    } catch (err) {
+      logger.error({ err, agentId }, 'Failed to clean up expired session');
+    } finally {
+      session[QR_HANDLER_IN_PROGRESS] = false;
+    }
+  });
+}
+
+async function createSession({ userId, agentId, apiKey }) {
+  const resolvedAgentName = agentId;
   // If no API key provided, try to find existing one
   if (!apiKey) {
     apiKey = await findActiveKeyByUserId(userId);
@@ -68,6 +93,8 @@ async function createSession({ userId, agentId, agentName, apiKey }) {
     apiKey,
     aiEndpointUrl,
   });
+
+  attachQrExpiryCleanup(session, agentId);
 
   const statusRecord = await updateStatus(agentId, deriveStatusPayload(session));
   logger.info({ agentId, state: session.state }, 'Session manager initialized');
@@ -136,7 +163,6 @@ async function reconnectSession(agentId) {
     session: {
       userId: refreshedRecord.user_id,
       agentId: refreshedRecord.agent_id,
-      agentName: refreshedRecord.session_name,
     },
     status: formatStatus(refreshedRecord),
     qr,
@@ -145,6 +171,80 @@ async function reconnectSession(agentId) {
 
 async function getSession(agentId) {
   return findByAgentId(agentId);
+}
+
+async function ensureLiveSession(agentId, existingRecord = null) {
+  const sessionRecord = existingRecord || (await getSession(agentId));
+  let session = sessionManager.get(agentId);
+
+  if (!session && sessionRecord) {
+    const userId = sessionRecord.user_id || sessionRecord.user_id_uuid;
+    try {
+      const { session: rehydratedSession } = await sessionManager.createOrUpdateSession({
+        userId,
+        agentId,
+        agentName: agentId,
+        apiKey: sessionRecord.api_key,
+        aiEndpointUrl: buildAiEndpointUrl(agentId),
+      });
+      session = rehydratedSession;
+    } catch (err) {
+      const error = new Error('Failed to rehydrate WhatsApp session');
+      error.status = 500;
+      error.cause = err;
+      throw error;
+    }
+  }
+
+  if (session) {
+    attachQrExpiryCleanup(session, agentId);
+  }
+
+  return { session, sessionRecord };
+}
+
+function mergeStatusWithLiveState({ sessionState, storedStatus }) {
+  const normalized = storedStatus
+    ? { ...storedStatus }
+    : {
+        state: sessionState === 'ready' ? 'connected' : sessionState || 'unknown',
+        lastConnectedAt: null,
+        lastDisconnectedAt: null,
+        updatedAt: null,
+      };
+
+  if (sessionState === 'ready') {
+    normalized.state = 'connected';
+  } else if (sessionState === 'initializing' || sessionState === 'qr') {
+    normalized.state = normalized.state || 'awaiting_qr';
+  } else if (sessionState === 'disconnected') {
+    normalized.state = 'disconnected';
+  } else if (sessionState === 'destroyed') {
+    normalized.state = 'terminated';
+  }
+
+  return normalized;
+}
+
+async function getSessionStatus(agentId) {
+  const { session, sessionRecord } = await ensureLiveSession(agentId);
+
+  if (!session && !sessionRecord) {
+    return null;
+  }
+
+  const storedStatus = sessionRecord ? formatStatus(sessionRecord) : null;
+  const sessionState = session?.state || null;
+  const status = mergeStatusWithLiveState({ sessionState, storedStatus });
+
+  return {
+    agentId,
+    userId: sessionRecord?.user_id || sessionRecord?.user_id_uuid || null,
+    status,
+    sessionState,
+    isReady: sessionState === 'ready',
+    hasClient: Boolean(session),
+  };
 }
 
 function deriveStatusPayload(session) {
@@ -182,4 +282,6 @@ module.exports = {
   reconnectSession,
   getSession,
   buildAiEndpointUrl,
+  ensureLiveSession,
+  getSessionStatus,
 };

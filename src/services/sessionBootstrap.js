@@ -1,5 +1,4 @@
 const logger = require('../utils/logger');
-const sessionManager = require('./whatsappSessionManager');
 const sessionService = require('./sessionService');
 const { findActiveSessions } = require('../database/sessionRepository');
 
@@ -14,15 +13,8 @@ async function bootstrapSessions() {
 
   for (const record of sessions) {
     try {
-      const { agent_id: agentId, user_id: userId, session_name: agentName, api_key: apiKey, endpoint_url_run: endpointUrlRun } = record;
-      const aiEndpointUrl = sessionService.buildAiEndpointUrl(agentId);
-      await sessionManager.createOrUpdateSession({
-        userId,
-        agentId,
-        agentName: agentName || agentId,
-        apiKey,
-        aiEndpointUrl,
-      });
+      const { agent_id: agentId } = record;
+      await sessionService.ensureLiveSession(agentId, record);
       logger.info({ agentId }, 'Restored WhatsApp session from persisted data');
     } catch (err) {
       logger.error({ err, agentId: record.agent_id }, 'Failed to bootstrap WhatsApp session');

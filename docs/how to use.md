@@ -44,8 +44,7 @@ curl -X POST http://localhost:3000/sessions \
   -H "Content-Type: application/json" \
   -d '{
         "userId": 123,
-        "agentId": "support-bot",
-        "agentName": "Support Bot"
+        "agentId": "support-bot"
       }'
 ```
 
@@ -73,7 +72,16 @@ curl -X POST http://localhost:3000/agents/support-bot/run \
 
 - Regenerate a QR code after network issues: `POST /sessions/{agentId}/reconnect`
 - Tear down the agent: `DELETE /sessions/{agentId}`
+- Check the live session state without leaving the `agents` namespace: `GET /agents/{agentId}/get-status`
 - Inspect status fields (`connected`, `awaiting_qr`, timestamps) in the JSON responses or directly in the `whatsapp_user` table.
+
+Example `curl` to check status (remember to pass the agent's unique `agentId`, not a display name):
+
+```bash
+curl http://localhost:3000/agents/support-bot/get-status | jq
+```
+
+The response mirrors `GET /sessions/{agentId}` and reports whether the WhatsApp client is connected (`isReady: true`), the active user/agent identifiers, and the last connection timestamps.
 
 ## 6. Housekeeping
 

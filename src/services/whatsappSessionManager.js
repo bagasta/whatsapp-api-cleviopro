@@ -21,6 +21,7 @@ class WhatsappSession extends EventEmitter {
     this.aiEndpointUrl = aiEndpointUrl;
     this.state = 'initializing';
     this.currentQr = null;
+     this.firstQrProvided = false;
     this.client = this.buildClient();
     this.registerEvents();
   }
@@ -40,10 +41,16 @@ class WhatsappSession extends EventEmitter {
 
   registerEvents() {
     this.client.on('qr', async (qr) => {
+      if (this.firstQrProvided) {
+        logger.info({ agentId: this.agentId }, 'Received new QR before authentication; expiring session');
+        this.emit('qr_expired');
+        return;
+      }
       try {
         const buffer = await qrcode.toBuffer(qr, { type: 'png', width: 300 });
         const expiresAt = Date.now() + config.qrExpirationMinutes * 60 * 1000;
         this.currentQr = { buffer, generatedAt: Date.now(), expiresAt };
+        this.firstQrProvided = true;
         this.emit('qr', this.currentQr);
         logger.info({ agentId: this.agentId }, 'QR code generated');
         updateStatus(this.agentId, { status: 'awaiting_qr' }).catch((err) =>
@@ -152,6 +159,7 @@ class WhatsappSession extends EventEmitter {
 
   async refreshQr(timeoutMs = 60_000) {
     this.currentQr = null;
+    this.firstQrProvided = false;
     const waitQrPromise = this.waitForQr(timeoutMs);
     try {
       await this.client.logout();
@@ -308,13 +316,19 @@ class WhatsappSessionManager {
       session.agentName = agentName;
       session.apiKey = apiKey;
       session.aiEndpointUrl = aiEndpointUrl;
+      session.shouldReconnectOnDisconnect = true;
       return { session, created: false };
     }
 
     session = new WhatsappSession({ userId, agentId, agentName, apiKey, aiEndpointUrl });
+    session.shouldReconnectOnDisconnect = true;
     this.sessions.set(agentId, session);
 
     session.on('disconnected', async () => {
+      if (!session.shouldReconnectOnDisconnect) {
+        logger.info({ agentId }, 'Skipping automatic reconnect after intentional disconnect');
+        return;
+      }
       logger.info({ agentId }, 'Attempting session reconnection');
       try {
         await session.client.initialize();
@@ -332,6 +346,7 @@ class WhatsappSessionManager {
     if (!session) {
       return false;
     }
+    session.shouldReconnectOnDisconnect = false;
     await session.destroy();
     this.sessions.delete(agentId);
     return true;

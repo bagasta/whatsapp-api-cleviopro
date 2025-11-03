@@ -39,8 +39,9 @@ curl -X POST http://localhost:8000/sessions \
 1. Fetches the latest active API key for the provided `userId` from `cleviopro.public.api_key`.
 2. Spins up (or rehydrates) a WhatsApp Web session scoped to `agentId`.
 3. Stores the session metadata in `cleviopro.public.whatsapp_user`:
-   - `user_id`, `agent_id`, `api_key`, `session_name`, `endpoint_url_run`, timestamps.
+   - `user_id`, `agent_id`, `api_key`, `endpoint_url_run`, timestamps.
 4. Generates a QR code image valid for 5 minutes and returns it as a base64 encoded PNG.
+5. If the QR code expires before the device is authenticated, the session and its QR code are discarded automatically; call this endpoint again to start over.
 
 ### Success Response
 
@@ -50,8 +51,7 @@ curl -X POST http://localhost:8000/sessions \
   "endpointUrl": "http://localhost:8000/agents/support-bot/run",
   "session": {
     "userId": 123,
-    "agentId": "support-bot",
-    "agentName": "support-bot"
+    "agentId": "support-bot"
   },
   "status": {
     "state": "awaiting_qr",
@@ -86,6 +86,44 @@ curl -X DELETE http://localhost:8000/sessions/support-bot
 
 ---
 
+## Get Session Status
+
+`GET /sessions/{agentId}`
+
+- Returns the current persisted status together with the live WhatsApp client state (if running).
+- `isReady` indicates whether the in-memory session is authenticated and ready to send messages.
+- Response: `404 Not Found` when no session record exists.
+
+### cURL Example
+
+```bash
+curl http://localhost:8000/sessions/support-bot
+```
+
+```bash
+curl http://localhost:8000/sessions/support-bot | jq
+```
+
+### Success Response
+
+```json
+{
+  "agentId": "support-bot",
+  "userId": 123,
+  "status": {
+    "state": "connected",
+    "lastConnectedAt": "2025-01-01T12:05:00.000Z",
+    "lastDisconnectedAt": "2024-12-31T18:10:00.000Z",
+    "updatedAt": "2025-01-01T12:05:00.000Z"
+  },
+  "sessionState": "ready",
+  "isReady": true,
+  "hasClient": true
+}
+```
+
+---
+
 ## Reconnect Session
 
 `POST /sessions/{agentId}/reconnect`
@@ -105,8 +143,7 @@ curl -X POST http://localhost:8000/sessions/support-bot/reconnect
   "endpointUrl": "http://localhost:8000/agents/support-bot/run",
   "session": {
     "userId": 123,
-    "agentId": "support-bot",
-    "agentName": "support-bot"
+    "agentId": "support-bot"
   },
   "status": {
     "state": "awaiting_qr",
@@ -234,6 +271,70 @@ curl -X POST http://localhost:8000/agents/support-bot/messages \
 ```
 
 If the destination chat cannot be reached, the endpoint returns `502 Bad Gateway`.
+
+---
+
+## Send Media Message
+
+`POST /agents/{agentId}/media`
+
+### Headers
+
+- `Content-Type: application/json`
+- `Authorization: Bearer <API KEY>`
+
+### Request Body
+
+```json
+{
+  "to": "6281234567890",
+  "type": "document",
+  "filename": "invoice.pdf",
+  "data": "BASE64_ENCODED_FILE",
+  "caption": "Invoice #123",
+  "mimetype": "application/pdf"
+}
+```
+
+You may provide either `data` (base64 string) or `url` for the file source. Supported `type` values: `document`, `image`, `audio`, `video`, `sticker`.
+
+### cURL Example
+
+```bash
+curl -X POST http://localhost:8000/agents/support-bot/media \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "to": "6281234567890",
+    "type": "document",
+    "filename": "invoice.pdf",
+    "data": "'"$(base64 -w0 ./invoice.pdf)"'",
+    "caption": "Invoice #123",
+    "mimetype": "application/pdf"
+  }'
+```
+
+### Behavior
+
+- Validates the stored API key and required fields (`to`, `type`, and either `data` or `url`).
+- Converts bare phone numbers into WhatsApp IDs with `@c.us`.
+- Downloads remote files when `url` is provided; otherwise decodes the supplied base64 `data`.
+- Sends the file using WhatsApp Web.js with sensible defaults (`sendMediaAsDocument` for documents, caption support where applicable).
+- Optionally persists a copy to the temp directory (default `true`); disable by setting `save_to_temp: false`.
+
+### Success Response
+
+```json
+{
+  "status": "sent",
+  "to": "6281234567890@c.us",
+  "type": "document",
+  "messageId": "true_6281234567890@c.us_XXXXXXXXXXXXXX",
+  "previewPath": "/home/app/temp/2025-01-01T12-05-00_6281234567890@c.us.pdf"
+}
+```
+
+If WhatsApp rejects the media, the endpoint returns `502 Bad Gateway` with the underlying reason.
 
 ---
 
