@@ -23,7 +23,7 @@ Update at least the following keys in `.env`:
 
 - `DATABASE_URL` – PostgreSQL connection string that exposes the `api_key` and `whatsapp_user` tables.
 - `APP_BASE_URL` – Public URL clients will use to call `/agents/{agentId}/run`.
-- (Optional) `AI_BACKEND_URL`, `DEFAULT_OPENAI_API_KEY`, `PORT`, and timeout/logging knobs as documented in `README.md`.
+- (Optional) `AI_BACKEND_URL`, `DEFAULT_OPENAI_API_KEY`, `CORS_ALLOWED_ORIGINS`, `CORS_ALLOW_CREDENTIALS`, `PORT`, and timeout/logging knobs as documented in `README.md`.
 
 ## 2. Run the Server Locally
 
@@ -78,10 +78,10 @@ curl -X POST http://localhost:3000/agents/support-bot/run \
 Example `curl` to check status (remember to pass the agent's unique `agentId`, not a display name):
 
 ```bash
-curl http://localhost:3000/agents/support-bot/get-status | jq
+curl -s http://localhost:3000/agents/AgentId/get-status | jq '{state: .state, isConnected: .isConnected, sessionState: .sessionState, updatedAt: .status.updatedAt}'
 ```
 
-The response mirrors `GET /sessions/{agentId}` and reports whether the WhatsApp client is connected (`isReady: true`), the active user/agent identifiers, and the last connection timestamps.
+The response mirrors `GET /sessions/{agentId}` while also surfacing top-level `state` and `isConnected` fields so you can quickly see if the WhatsApp client is online. The nested `status` object still carries timestamp metadata and historical fields.
 
 ## 6. Housekeeping
 

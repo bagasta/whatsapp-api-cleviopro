@@ -34,16 +34,40 @@ function attachQrExpiryCleanup(session, agentId) {
   }
   session[QR_HANDLER_ATTACHED] = true;
   session.on('qr_expired', async () => {
-    if (session.state === 'ready' || session[QR_HANDLER_IN_PROGRESS]) {
+    if (session.state === 'ready' || session[QR_HANDLER_IN_PROGRESS] || (typeof session.isAwaitingAuthentication === 'function' && !session.isAwaitingAuthentication())) {
       return;
     }
     session[QR_HANDLER_IN_PROGRESS] = true;
-    logger.info({ agentId }, 'QR code expired before authentication; cleaning up session');
+    const wasEverReady =
+      typeof session.hasReadyHistory === 'function'
+        ? session.hasReadyHistory()
+        : session.hasEverBeenReady === true;
+    const now = new Date();
+    const cleanupLabel = wasEverReady
+      ? 'QR code expired after prior authentication; preserving session state'
+      : 'QR code expired before authentication; cleaning up session';
+
+    logger.info({ agentId }, cleanupLabel);
     try {
-      await deleteSession(agentId);
-      logger.info({ agentId }, 'Session removed after QR expiration');
+      if (wasEverReady) {
+        if (typeof session.resetAfterQrExpiry === 'function') {
+          await session.resetAfterQrExpiry({ removeAuthFiles: true });
+        } else if (typeof session.destroyCurrentClient === 'function') {
+          await session.destroyCurrentClient({
+            skipLogout: true,
+            removeAuthFiles: true,
+            allowConnectedDestroy: true,
+            reason: 'qr_expired_cleanup',
+          });
+          session.state = 'disconnected';
+        }
+        await updateStatus(agentId, { status: 'disconnected', lastDisconnectedAt: now });
+      } else {
+        await deleteSession(agentId);
+        logger.info({ agentId }, 'Session removed after QR expiration');
+      }
     } catch (err) {
-      logger.error({ err, agentId }, 'Failed to clean up expired session');
+      logger.error({ err, agentId }, 'Failed to handle expired session cleanup');
     } finally {
       session[QR_HANDLER_IN_PROGRESS] = false;
     }
@@ -100,7 +124,7 @@ async function createSession({ userId, agentId, apiKey }) {
   logger.info({ agentId, state: session.state }, 'Session manager initialized');
 
   let qrBuffer = session.getQrImage();
-  if (!qrBuffer) {
+  if (!qrBuffer && session.state !== 'ready') {
     try {
       qrBuffer = await session.waitForQr();
     } catch (err) {
@@ -141,9 +165,31 @@ async function reconnectSession(agentId) {
     throw error;
   }
 
+  const liveSession = sessionManager.get(agentId);
+  const isAlreadyReady =
+    liveSession && typeof liveSession.isReady === 'function'
+      ? liveSession.isReady()
+      : liveSession && liveSession.state === 'ready';
+
+  if (isAlreadyReady) {
+    logger.info({ agentId }, 'Reconnect requested but session is already ready; returning conflict');
+
+    if ((existingRecord.status || '').toLowerCase() !== 'connected') {
+      try {
+        await updateStatus(agentId, { status: 'connected', lastConnectedAt: new Date() });
+      } catch (err) {
+        logger.warn({ err, agentId }, 'Failed to persist connected status while skipping reconnect');
+      }
+    }
+
+    const conflictError = new Error('Session is already connected');
+    conflictError.status = 409;
+    throw conflictError;
+  }
+
   await updateStatus(agentId, { status: 'reconnecting' });
 
-  const { session, qrBuffer } = await sessionManager.reconnectSession(agentId, { forceQr: true });
+  const { session, qrBuffer } = await sessionManager.reconnectSession(agentId, { timeoutMs: 30_000 });
   logger.info({ agentId }, 'Session reconnect triggered');
 
   const refreshedRecord = await findByAgentId(agentId);
@@ -176,6 +222,11 @@ async function getSession(agentId) {
 async function ensureLiveSession(agentId, existingRecord = null) {
   const sessionRecord = existingRecord || (await getSession(agentId));
   let session = sessionManager.get(agentId);
+
+  if (session && typeof session.isReady === 'function' && session.isReady()) {
+    attachQrExpiryCleanup(session, agentId);
+    return { session, sessionRecord };
+  }
 
   if (!session && sessionRecord) {
     const userId = sessionRecord.user_id || sessionRecord.user_id_uuid;
@@ -227,7 +278,16 @@ function mergeStatusWithLiveState({ sessionState, storedStatus }) {
 }
 
 async function getSessionStatus(agentId) {
-  const { session, sessionRecord } = await ensureLiveSession(agentId);
+  let sessionRecord = null;
+  let session = null;
+
+  try {
+    ({ session, sessionRecord } = await ensureLiveSession(agentId));
+  } catch (err) {
+    logger.warn({ err, agentId }, 'Failed to ensure live session while reading status; returning persisted state');
+    session = sessionManager.get(agentId) || null;
+    sessionRecord = sessionRecord || (await getSession(agentId));
+  }
 
   if (!session && !sessionRecord) {
     return null;

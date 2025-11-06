@@ -97,11 +97,7 @@ curl -X DELETE http://localhost:8000/sessions/support-bot
 ### cURL Example
 
 ```bash
-curl http://localhost:8000/sessions/support-bot
-```
-
-```bash
-curl http://localhost:8000/sessions/support-bot | jq
+curl -s http://localhost:8000/sessions/support-bot | jq '{state: .state, isConnected: .isConnected, sessionState: .sessionState, updatedAt: .status.updatedAt}'
 ```
 
 ### Success Response
@@ -110,6 +106,8 @@ curl http://localhost:8000/sessions/support-bot | jq
 {
   "agentId": "support-bot",
   "userId": 123,
+  "state": "connected",
+  "isConnected": true,
   "status": {
     "state": "connected",
     "lastConnectedAt": "2025-01-01T12:05:00.000Z",

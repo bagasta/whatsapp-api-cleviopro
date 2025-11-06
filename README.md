@@ -37,6 +37,8 @@ The server listens on `PORT` (default `3000`). Browse to `http://localhost:3000/
 | `DATABASE_URL` | PostgreSQL connection string (required). |
 | `APP_BASE_URL` | Public base URL of this API (used to compose `/agents/{agentId}/run`). Defaults to `http://localhost:8000`. |
 | `AI_BACKEND_URL` | Base URL of the downstream AI service (`/agents/{agentId}/run` will be appended). Leave blank to disable forwarding. |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated list of allowed origins for browser clients (default `*`). |
+| `CORS_ALLOW_CREDENTIALS` | Set to `true` to allow credentialed cross-origin requests (only when origins are explicit). |
 | `DEFAULT_OPENAI_API_KEY` | Optional fallback if callers omit `openai_api_key` in `/agents/{agentId}/run`. |
 | `TEMP_DIR` | Directory for temporarily stored attachments (default `./temp`). |
 | `QR_EXPIRATION_MINUTES` | QR validity window (default `5`). |

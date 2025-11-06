@@ -102,8 +102,20 @@ async function getSessionStatus(req, res, next) {
       throw error;
     }
 
+    const state =
+      details?.status?.state ||
+      (details?.sessionState === 'ready'
+        ? 'connected'
+        : details?.sessionState || (details?.isReady ? 'connected' : 'unknown'));
+
+    const responsePayload = {
+      ...details,
+      state,
+      isConnected: state === 'connected',
+    };
+
     req.loggerInfo = { ...(req.loggerInfo || {}), action: 'get_session_status' };
-    res.json(details);
+    res.json(responsePayload);
   } catch (err) {
     next(err);
   }

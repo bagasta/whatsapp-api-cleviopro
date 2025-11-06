@@ -4,6 +4,32 @@ const logger = require('../utils/logger');
 
 const warmPromises = new Map();
 
+function looksLikeHtmlString(value) {
+  if (typeof value !== 'string') {
+    return false;
+  }
+  const snippet = value.trim().slice(0, 200).toLowerCase();
+  if (!snippet) {
+    return false;
+  }
+  return (
+    snippet.startsWith('<!doctype') ||
+    snippet.startsWith('<html') ||
+    /<head[\s>]/.test(snippet) ||
+    /<body[\s>]/.test(snippet)
+  );
+}
+
+function stripHtmlTags(value) {
+  if (typeof value !== 'string') {
+    return value;
+  }
+  const withoutScripts = value.replace(/<script[\s\S]*?<\/script>/gi, ' ');
+  const withoutStyles = withoutScripts.replace(/<style[\s\S]*?<\/style>/gi, ' ');
+  const withoutTags = withoutStyles.replace(/<\/?[^>]+>/g, ' ');
+  return withoutTags.replace(/\s+/g, ' ').trim();
+}
+
 function getWarmEndpoint(endpointUrl) {
   if (!endpointUrl) {
     return null;
@@ -126,6 +152,17 @@ async function forwardToAI({ endpointUrl, apiKey, message, sessionId, openAiKey,
   try {
     const response = await sendRequest();
     logger.info({ endpointUrl, status: response.status }, 'Forwarded message to AI backend');
+    if (typeof response.data === 'string' && looksLikeHtmlString(response.data)) {
+      const sanitized = stripHtmlTags(response.data);
+      logger.warn(
+        {
+          endpointUrl,
+          sanitizedPreview: sanitized ? sanitized.slice(0, 140) : null,
+        },
+        'AI backend returned HTML; sanitized to plain text'
+      );
+      return sanitized || 'AI backend returned unexpected HTML content.';
+    }
     return response.data;
   } catch (err) {
     if (err?.response?.status === 400 && shouldWarmForError(err)) {
@@ -137,6 +174,17 @@ async function forwardToAI({ endpointUrl, apiKey, message, sessionId, openAiKey,
       try {
         const retryResponse = await sendRequest();
         logger.info({ endpointUrl, status: retryResponse.status }, 'Forwarded message to AI backend after warm');
+        if (typeof retryResponse.data === 'string' && looksLikeHtmlString(retryResponse.data)) {
+          const sanitized = stripHtmlTags(retryResponse.data);
+          logger.warn(
+            {
+              endpointUrl,
+              sanitizedPreview: sanitized ? sanitized.slice(0, 140) : null,
+            },
+            'AI backend returned HTML after warm; sanitized to plain text'
+          );
+          return sanitized || 'AI backend returned unexpected HTML content.';
+        }
         return retryResponse.data;
       } catch (retryErr) {
         logger.error({ err: formatError(retryErr) }, 'Failed to forward message to AI backend after warm');

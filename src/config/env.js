@@ -15,10 +15,16 @@ module.exports = {
   port: parseInt(process.env.PORT || '3000', 10),
   appBaseUrl: process.env.APP_BASE_URL || 'http://localhost:8000',
   aiBackendBaseUrl: process.env.AI_BACKEND_URL || null,
+  corsAllowedOrigins: (process.env.CORS_ALLOWED_ORIGINS || '*')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+  corsAllowCredentials: String(process.env.CORS_ALLOW_CREDENTIALS || 'false').toLowerCase() === 'true',
   databaseUrl: process.env.DATABASE_URL,
   tempDir: process.env.TEMP_DIR || path.resolve(process.cwd(), 'temp'),
   qrExpirationMinutes: parseInt(process.env.QR_EXPIRATION_MINUTES || '5', 10),
   sessionCleanupIntervalMinutes: parseInt(process.env.SESSION_CLEANUP_INTERVAL_MINUTES || '60', 10),
   defaultOpenAiApiKey: process.env.DEFAULT_OPENAI_API_KEY || null,
   aiRequestTimeoutMs: parseInt(process.env.AI_REQUEST_TIMEOUT_MS || '120000', 10),
+  messageLogMaxEntries: parseInt(process.env.MESSAGE_LOG_MAX_ENTRIES || '2000', 10),
 };
